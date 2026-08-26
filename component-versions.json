@@ -1,0 +1,7 @@
+{
+  "go": "1.26.3",
+  "components": {
+    "sqlite": "3.46.1",
+    "modernc.org/sqlite": "v1.52.0"
+  }
+}
