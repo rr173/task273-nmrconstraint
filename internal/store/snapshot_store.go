@@ -89,8 +89,12 @@ func (s *SnapshotStore) UpdateStatus(id int64, status model.SnapshotStatus) erro
 }
 
 // Items 列出快照条目。
+// 快照条目在创建时刻已冻结其 lo_bound/hi_bound（见 snapshot_items 表），
+// 这里必须直接读取冻结值，不得 JOIN 实时 bound_edges——否则后续豁免、
+// 重新求解等改动现场边界后，已保存的快照条目会跟着现场数据漂移，
+// 违反快照不可变语义。
 func (s *SnapshotStore) Items(snapshotID int64) ([]*model.SnapshotItem, error) {
-	rows, err := s.db.Query(`SELECT si.id, si.snapshot_id, si.constraint_id, si.atom1_id, si.atom2_id, si.lo_dist, si.hi_dist, COALESCE(be.lo_bound, si.lo_bound), COALESCE(be.hi_bound, si.hi_bound), si.status FROM snapshot_items si LEFT JOIN bound_edges be ON be.constraint_id = si.constraint_id WHERE si.snapshot_id = ? ORDER BY si.id`, snapshotID)
+	rows, err := s.db.Query(`SELECT id, snapshot_id, constraint_id, atom1_id, atom2_id, lo_dist, hi_dist, lo_bound, hi_bound, status FROM snapshot_items WHERE snapshot_id = ? ORDER BY id`, snapshotID)
 	if err != nil {
 		return nil, err
 	}
