@@ -22,8 +22,6 @@ type SolveResult struct {
 	BatchStatus   model.BatchStatus      `json:"batch_status"`
 }
 
-var sharedSolveResult = &SolveResult{}
-
 // DiagnosisService 编排求解：传播 → 冲突检测 → 冲突集 → 最小化 → 豁免。
 type DiagnosisService struct {
 	batches *store.BatchStore
@@ -46,6 +44,10 @@ func NewDiagnosisService(batches *store.BatchStore, cons *store.ConstraintStore,
 
 // Solve 对批次执行一次完整求解并落盘传播边界。
 // ctx 取消时不得落盘半成品边界或批次状态。
+//
+// 二十位研究者会同时对各自批次调用求解：返回值必须是每次调用新建的
+// 对象，绝不能复用包级变量——否则并发求解会把别人的 BatchID、迭代
+// 轮数、冲突证据串进当前结果（跨批次踩内存）。
 func (s *DiagnosisService) Solve(ctx context.Context, batchID int64) (*SolveResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -136,21 +138,11 @@ func (s *DiagnosisService) Solve(ctx context.Context, batchID int64) (*SolveResu
 		}
 	}
 
-	var kind *model.ConflictKind
+var kind *model.ConflictKind
 	if hasConflict {
 		k := diagnose.ConflictKindOf(res.Inverted, violations)
 		kind = &k
 	}
-	sharedSolveResult.BatchID = batchID
-	sharedSolveResult.Iterations = res.Iterations
-	sharedSolveResult.Converged = res.Converged
-	sharedSolveResult.HasConflict = hasConflict
-	sharedSolveResult.ConflictKind = kind
-	sharedSolveResult.Violations = violations
-	sharedSolveResult.InvertedEdges = len(res.Inverted)
-	sharedSolveResult.EdgeCount = len(res.Edges)
-	sharedSolveResult.BatchStatus = target
-	return sharedSolveResult, nil
 	return &SolveResult{
 		BatchID:       batchID,
 		Iterations:    res.Iterations,

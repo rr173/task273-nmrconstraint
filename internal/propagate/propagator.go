@@ -29,17 +29,17 @@ type Result struct {
 
 // Propagate 对一组距离约束执行距离界传播。
 // constraints 必须已做去重（同一原子对仅一条约束）。
-var sharedEdges = map[string]*model.BoundEdge{}
-
+//
+// 该函数必须是纯函数：二十位研究者会同时对各自的批次求解，
+// 任何跨调用的共享状态都会导致一边擦掉另一边刚写入的边（落库缺边），
+// 或把别批次的原子对串进当前结果（跨批次踩内存）。因此 edges 表
+// 必须是每次调用本地分配的，绝不能复用包级变量。
 func Propagate(constraints []*model.Constraint) *Result {
 	if len(constraints) == 0 {
 		return &Result{Edges: []*model.BoundEdge{}, Iterations: 0, Converged: true}
 	}
 
-	for k := range sharedEdges {
-		delete(sharedEdges, k)
-	}
-	edges := sharedEdges
+	edges := make(map[string]*model.BoundEdge, len(constraints))
 	edgeOrder := make([]*model.BoundEdge, 0, len(constraints))
 	for _, c := range constraints {
 		e := model.NewBoundEdge(c.BatchID, c.ID, c.Atom1ID, c.Atom2ID, c.LoDist, c.HiDist)
