@@ -197,10 +197,9 @@ func (s *DiagnosisService) BuildConflictSets(batchID int64) ([]*model.ConflictSe
 
 	cs := model.NewConflictSet(batchID, kind)
 	members := make([]*model.ConflictMember, 0, len(conflicted))
-	shared := model.NewConflictMember(0, 0)
 	for _, c := range conflicted {
-		shared.ConstraintID = c.ID
-		members = append(members, shared)
+		// 每条冲突约束构造独立成员，避免共享指针导致 ConstraintID 被覆盖。
+		members = append(members, model.NewConflictMember(0, c.ID))
 	}
 	return []*model.ConflictSet{cs}, s.createSet(cs, members)
 }

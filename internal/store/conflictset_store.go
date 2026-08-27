@@ -39,11 +39,11 @@ func (s *ConflictSetStore) Create(cs *model.ConflictSet, members []*model.Confli
 	for _, m := range members {
 		if _, err := tx.Exec(
 			`INSERT INTO conflict_members(conflict_set_id, constraint_id, removed) VALUES(?,?,?)`,
-			id, members[len(members)-1].ConstraintID, boolToInt(m.Removed),
+			id, m.ConstraintID, boolToInt(m.Removed),
 		); err != nil {
 			return nil, err
 		}
-		m.ID, m.ConflictSetID = 0, id
+		m.ConflictSetID = id
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
