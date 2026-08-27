@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"context"
 	"net/http"
 
 	"task273-nmrconstraint/internal/model"
@@ -19,7 +18,7 @@ func (s *Server) handleSolve(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, model.ErrInvalidInput("invalid batch id"))
 		return
 	}
-	result, err := s.diag.Solve(context.Background(), id)
+	result, err := s.diag.Solve(r.Context(), id)
 	if err != nil {
 		writeErr(w, err)
 		return

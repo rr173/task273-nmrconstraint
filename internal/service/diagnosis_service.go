@@ -43,7 +43,7 @@ func NewDiagnosisService(batches *store.BatchStore, cons *store.ConstraintStore,
 }
 
 // Solve 对批次执行一次完整求解并落盘传播边界。
-// ctx 取消时不得落盘半成品边界或批次状态。
+// ctx 取消时不得落盘半成品边界或批次状态，并按取消/超时返回。
 func (s *DiagnosisService) Solve(ctx context.Context, batchID int64) (*SolveResult, error) {
 	b, err := s.batches.Get(batchID)
 	if err != nil {
@@ -67,6 +67,10 @@ func (s *DiagnosisService) Solve(ctx context.Context, batchID int64) (*SolveResu
 	}
 
 	res := propagate.Propagate(active)
+	// 传播完成即归一化求解结果，供落盘前的最终判断使用。
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	violations := diagnose.DetectViolations(res.Edges)
 	hasConflict := len(res.Inverted) > 0 || len(violations) > 0
 
@@ -84,20 +88,29 @@ func (s *DiagnosisService) Solve(ctx context.Context, batchID int64) (*SolveResu
 			status = model.ConstraintConflicted
 		}
 		if c.Status != status {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			if err := s.cons.UpdateStatus(c.ID, status); err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	// 落盘传播边界（幂等替换）。
-	if err := s.bounds.ReplaceBatch(context.Background(), batchID, res.Edges); err != nil {
+	// 落盘传播边界（幂等替换）：取消时事务回滚，不留半表。
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := s.bounds.ReplaceBatch(ctx, batchID, res.Edges); err != nil {
 		return nil, err
 	}
 
 	// 更新批次状态：receiving 先进入 solving，再按冲突结果流转。
 	if b.Status == model.BatchReceiving {
 		if err := b.Advance(model.BatchSolving); err != nil {
+			return nil, err
+		}
+		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		if err := s.batches.UpdateStatus(batchID, b.Status, b.SealedAt); err != nil {
@@ -113,11 +126,17 @@ func (s *DiagnosisService) Solve(ctx context.Context, batchID int64) (*SolveResu
 			if err := b.Advance(model.BatchSolving); err != nil {
 				return nil, err
 			}
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			if err := s.batches.UpdateStatus(batchID, b.Status, b.SealedAt); err != nil {
 				return nil, err
 			}
 		}
 		if err := b.Advance(target); err != nil {
+			return nil, err
+		}
+		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		if err := s.batches.UpdateStatus(batchID, b.Status, b.SealedAt); err != nil {
