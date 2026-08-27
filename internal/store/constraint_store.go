@@ -22,7 +22,7 @@ func (s *ConstraintStore) Create(batchID int64, cons []*model.Constraint) ([]*mo
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = tx.Commit() }()
+	defer func() { _ = tx.Rollback() }()
 
 	for _, c := range cons {
 		res, err := tx.Exec(

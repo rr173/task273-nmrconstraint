@@ -21,7 +21,7 @@ func (s *AtomStore) Create(batchID int64, atoms []*model.Atom) ([]*model.Atom, e
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = tx.Commit() }()
+	defer func() { _ = tx.Rollback() }()
 
 	for _, a := range atoms {
 		res, err := tx.Exec(

@@ -26,7 +26,7 @@ func (s *BoundStore) ReplaceBatch(ctx context.Context, batchID int64, edges []*m
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tx.Commit() }()
+	defer func() { _ = tx.Rollback() }()
 
 	if _, err := tx.Exec(`DELETE FROM bound_edges WHERE batch_id = ?`, batchID); err != nil {
 		return err
