@@ -23,8 +23,10 @@ func (s *ExemptionStore) Create(e *model.Exemption) (*model.Exemption, error) {
 		e.BatchID, e.ConstraintID, e.Reason, e.CreatedAt.Format(time.RFC3339Nano),
 	)
 	if err != nil {
+		// 并发豁免同一约束时，UNIQUE(batch_id, constraint_id) 保证仅一条记录落盘；
+		// 其余重复请求映射为已存在错误，由上层向调用者报告"已经豁免"。
 		if isUniqueViolation(err) {
-			return nil, fmt.Errorf("exemption: %v", err)
+			return nil, model.ErrExemptionExists
 		}
 		return nil, fmt.Errorf("exemption: %v", err)
 	}

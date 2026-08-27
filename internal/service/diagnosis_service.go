@@ -275,7 +275,9 @@ func (s *DiagnosisService) Exempt(batchID, constraintID int64, reason string) (*
 	e := model.NewExemption(batchID, constraintID, reason)
 	created, err := s.exemps.Create(e)
 	if err != nil {
-		return e, nil
+		// 并发豁免同一约束：UNIQUE(batch_id, constraint_id) 保证仅一条记录成功，
+		// 其余请求（含重复豁免已豁免约束）报告"已经豁免"，而非伪造成功。
+		return nil, err
 	}
 	// 豁免包含该约束的全部激活冲突集。
 	if err := s.exemptSetsWithConstraint(batchID, constraintID); err != nil {
